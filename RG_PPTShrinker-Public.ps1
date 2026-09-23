@@ -818,7 +818,6 @@ $btnCleanup.Add_Click({if (-not $script:IsAdmin -or $script:RunState -eq 'Runnin
         $renameFailures = @()
         foreach ($outputFile in $outputFiles) {
             $destinationName = $outputFile.Name.Substring(6)
-            $destinationPath = Join-Path $outputFile.DirectoryName $destinationName
             try {Rename-Item -LiteralPath $outputFile.FullName -NewName $destinationName -ErrorAction Stop
                 $renamed++} catch {$renameFailures += "$($outputFile.FullName): $($_.Exception.Message)"}}
         $reportDeleted = $false
