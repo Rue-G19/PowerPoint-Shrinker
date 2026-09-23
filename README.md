@@ -4,9 +4,9 @@ A PPTX/PPTM file size shrinker that works by extracting the file and running the
 Installation and Setup:
 
 - Download the latest release
-Portable Binary (will unzip dependencies on launch)
+Portable Binary
 **OR**
-Use the simple installer
+Use the Installer
 
 How to use the tool:
 
