@@ -76,7 +76,7 @@ finally { Marshal.FreeCoTaskMem(name); }}
 finally{
 Marshal.ReleaseComObject(dialog);}}}
 '@}
-$script:IsAdmin = @('GB08319', 'GB10469') -contains $env:USERNAME #for locking to my GB number 
+$script:IsAdmin = $false
 $script:ScriptPath = $PSCommandPath
 $ScriptDirectory = Split-Path -Parent $script:ScriptPath
 $ImageMagick = Join-Path $ScriptDirectory 'ImageMagick\magick.exe'
@@ -134,10 +134,7 @@ $ImageMagick = Get-ImageMagickExecutable -ExpectedExePath $ImageMagick
 if (-not $ImageMagick) {exit}
 # Winforms fuckery
 $form = New-Object System.Windows.Forms.Form
-$form.Text = if ($script:IsAdmin) {
-    'PowerPoint Bulk Shrinker v2 - Rueben Gill - ADMIN MODE'
-} else {
-    'PowerPoint Bulk Shrinker v2'}
+$form.Text = 'PowerPoint Bulk Shrinker v2'
 $form.StartPosition = 'CenterScreen'
 $form.Size = New-Object System.Drawing.Size(1000, 700)
 $form.MinimumSize = New-Object System.Drawing.Size(850, 600)
@@ -200,18 +197,24 @@ $btnOpenTemp = New-Object System.Windows.Forms.Button
 $btnOpenTemp.Text = 'Open Temp Folder'
 $btnOpenTemp.Location = New-Object System.Drawing.Point(445, 165)
 $btnOpenTemp.Size = New-Object System.Drawing.Size(145, 38)
-$btnOpenTemp.Visible = $script:IsAdmin
+$btnOpenTemp.Visible = $false
 $form.Controls.Add($btnOpenTemp)
 $btnDeleteBaks = New-Object System.Windows.Forms.Button
 $btnDeleteBaks.Text = 'Delete .bak Files'
-$btnDeleteBaks.Location = New-Object System.Drawing.Point(600, 165)
-$btnDeleteBaks.Size = New-Object System.Drawing.Size(135, 38)
-$btnDeleteBaks.Visible = $script:IsAdmin
+$btnDeleteBaks.Location = New-Object System.Drawing.Point(575, 165)
+$btnDeleteBaks.Size = New-Object System.Drawing.Size(120, 38)
+$btnDeleteBaks.Visible = $false
 $form.Controls.Add($btnDeleteBaks)
+$btnCleanup = New-Object System.Windows.Forms.Button
+$btnCleanup.Text = 'Cleanup Outputs'
+$btnCleanup.Location = New-Object System.Drawing.Point(700, 165)
+$btnCleanup.Size = New-Object System.Drawing.Size(120, 38)
+$btnCleanup.Visible = $false
+$form.Controls.Add($btnCleanup)
 $btnOpenLogs = New-Object System.Windows.Forms.Button
 $btnOpenLogs.Text = 'Open Logs & Backups'
-$btnOpenLogs.Location = New-Object System.Drawing.Point(740, 165)
-$btnOpenLogs.Size = New-Object System.Drawing.Size(155, 38)
+$btnOpenLogs.Location = New-Object System.Drawing.Point(825, 165)
+$btnOpenLogs.Size = New-Object System.Drawing.Size(145, 38)
 $form.Controls.Add($btnOpenLogs)
 $lblStatus = New-Object System.Windows.Forms.Label
 $lblStatus.Text = 'Ready'
@@ -273,6 +276,18 @@ $txtLog.ReadOnly = $true
 $txtLog.BackColor = [System.Drawing.Color]::White
 $txtLog.Font = New-Object System.Drawing.Font('Consolas', 9)
 $form.Controls.Add($txtLog)
+$lblCredit = New-Object System.Windows.Forms.Label
+$lblCredit.Text = 'Designed and created by Rueben Gill'
+$lblCredit.Location = New-Object System.Drawing.Point(20, 640)
+$lblCredit.AutoSize = $true
+$lblCredit.Anchor = 'Bottom,Left'
+$form.Controls.Add($lblCredit)
+$chkAdminMode = New-Object System.Windows.Forms.CheckBox
+$chkAdminMode.Text = 'Enable admin mode'
+$chkAdminMode.Location = New-Object System.Drawing.Point(820, 640)
+$chkAdminMode.Size = New-Object System.Drawing.Size(145, 24)
+$chkAdminMode.Anchor = 'Bottom,Right'
+$form.Controls.Add($chkAdminMode)
 $script:Queue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
 $script:CancelRequested = $false
 $script:WorkerPowerShell = $null
@@ -286,7 +301,7 @@ $script:DebugLogPath = $null
 $script:LogWriter = $null
 $script:StartTime = $null
 $script:TempDirectory = [IO.Path]::GetTempPath()
-$script:BackupRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RG PPTX shrinker backups'
+$script:BackupRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PPTX shrinker backups'
 function Add-UILog {
     param([string]$Message)
     $stamp = (Get-Date).ToString('HH:mm:ss.fff')
@@ -588,7 +603,6 @@ $newSize = (Get-Item -LiteralPath $rebuiltPath).Length
     try {Log '------------------------------------------'
         Log 'RG-WORKER STARTED'
         Log "PowerShell: $($PSVersionTable.PSVersion)"
-        Log "User: $env:USERNAME"
         Log "Folder: $Folder"
         Log "Backup root: $BackupRoot"
         Log "ImageMagick: $MagickPath"
@@ -696,6 +710,27 @@ $btnBrowse.Add_Click({$selectedFolder = [ModernFolderPicker]::Pick($form.Handle,
     if (-not [string]::IsNullOrWhiteSpace($selectedFolder)) {$txtFolder.Text = $selectedFolder}})
 $btnSelectAll.Add_Click({foreach ($item in $fileList.Items) {$item.Checked = $true}})
 $btnSelectNone.Add_Click({foreach ($item in $fileList.Items) {$item.Checked = $false}})
+$chkAdminMode.Add_CheckedChanged({
+    if ($chkAdminMode.Checked -and -not $script:IsAdmin) {
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+            "Admin mode exposes maintenance tools that can open temporary working files and permanently delete .bak backup files.`r`n`r`nOnly enable this mode if you understand these risks and are responsible for the selected files. Continue?",
+            'Enable Admin Mode - Risk Warning',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning)
+        if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) {
+            $chkAdminMode.Checked = $false
+            return}
+        $script:IsAdmin = $true
+        $btnOpenTemp.Visible = $true
+        $btnDeleteBaks.Visible = $true
+        $btnCleanup.Visible = $true
+        $lblStatus.Text = 'Admin mode enabled'}
+    elseif (-not $chkAdminMode.Checked) {
+        $script:IsAdmin = $false
+        $btnOpenTemp.Visible = $false
+        $btnDeleteBaks.Visible = $false
+        $btnCleanup.Visible = $false
+        if ($script:RunState -ne 'Running') {$lblStatus.Text = 'Admin mode disabled'}}})
 $btnOpenTemp.Add_Click({if (-not $script:IsAdmin) {return}
     try {Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $script:TempDirectory.TrimEnd('\')) } catch {
         [System.Windows.Forms.MessageBox]::Show(
@@ -751,6 +786,61 @@ $btnDeleteBaks.Add_Click({if (-not $script:IsAdmin -or $script:RunState -eq 'Run
         Add-UILog ("BAK CLEANUP ERROR: " + $_.Exception.Message)
         [System.Windows.Forms.MessageBox]::Show(
             "Could not delete all .bak files:`r`n$($_.Exception.Message)",
+            'PowerPoint Bulk Shrinker - Cleanup Error',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null}})
+$btnCleanup.Add_Click({if (-not $script:IsAdmin -or $script:RunState -eq 'Running') {return}
+    $folder = $txtFolder.Text.Trim()
+    if ([string]::IsNullOrWhiteSpace($folder) -or
+        (-not (Test-Path -LiteralPath $folder -PathType Container))) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Please select an existing folder first.',
+            'PowerPoint Bulk Shrinker',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        return}
+    try {$outputFiles = @(Get-ChildItem -LiteralPath $folder -Filter 'Small_*.pptx' -File -Recurse -ErrorAction Stop)
+        $reportPath = Join-Path $folder 'PPT_Shrinking_Report.csv'
+        if ($outputFiles.Count -eq 0 -and -not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                'No Small_ PowerPoint files or shrinking report were found in the selected folder or its subfolders.',
+                'PowerPoint Bulk Shrinker',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+            return}
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+            "Delete the shrinking report and rename $($outputFiles.Count) Small_ PowerPoint file(s) in:`r`n$folder",
+            'Confirm Output Cleanup',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning)
+        if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) {return}
+        $renamed = 0
+        $renameFailures = @()
+        foreach ($outputFile in $outputFiles) {
+            $destinationName = $outputFile.Name.Substring(6)
+            $destinationPath = Join-Path $outputFile.DirectoryName $destinationName
+            try {Rename-Item -LiteralPath $outputFile.FullName -NewName $destinationName -ErrorAction Stop
+                $renamed++} catch {$renameFailures += "$($outputFile.FullName): $($_.Exception.Message)"}}
+        $reportDeleted = $false
+        if (Test-Path -LiteralPath $reportPath -PathType Leaf) {
+            Remove-Item -LiteralPath $reportPath -Force -ErrorAction Stop
+            $reportDeleted = $true}
+        Add-UILog "OUTPUT CLEANUP: renamed $renamed file(s), report deleted: $reportDeleted"
+        if ($renameFailures.Count -gt 0) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Cleanup finished with $($renameFailures.Count) rename failure(s).`r`n`r`n$($renameFailures -join "`r`n")",
+                'PowerPoint Bulk Shrinker - Cleanup Warning',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null}
+        else {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Cleanup complete. Renamed $renamed file(s) and deleted the report: $reportDeleted.",
+                'PowerPoint Bulk Shrinker - Cleanup Complete',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null}} catch {
+        Add-UILog ("OUTPUT CLEANUP ERROR: " + $_.Exception.Message)
+        [System.Windows.Forms.MessageBox]::Show(
+            "Could not complete output cleanup:`r`n$($_.Exception.Message)",
             'PowerPoint Bulk Shrinker - Cleanup Error',
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null}})
@@ -835,6 +925,8 @@ $btnStart.Add_Click({
     $btnScan.Enabled = $false
     $btnBrowse.Enabled = $false
     $btnDeleteBaks.Enabled = $false
+    $btnCleanup.Enabled = $false
+    $chkAdminMode.Enabled = $false
     $btnCancel.Enabled = $true
     $rbHigh.Enabled = $false
     $rbMedium.Enabled = $false
@@ -849,7 +941,6 @@ $btnStart.Add_Click({
     Add-UILog "Maximum image width: $($settings.MaxWidth)"
     Add-UILog "I refuse to take responsibility for any data loss. By continuing, you agree to this risk.`r`nBackups will be saved to: $backupRoot (please verify this folder exists and is writable)"
     Add-UILog "PowerShell version: $($PSVersionTable.PSVersion)"
-    Add-UILog "Windows user: $env:USERNAME"
     Add-UILog "Script path: $script:ScriptPath"
     Add-UILog "Script directory: $ScriptDirectory"
     Add-UILog "Selected folder: $folder"
@@ -901,6 +992,8 @@ $btnStart.Add_Click({
         $btnScan.Enabled = $true
         $btnBrowse.Enabled = $true
         $btnDeleteBaks.Enabled = $true
+        $btnCleanup.Enabled = $true
+        $chkAdminMode.Enabled = $true
         $btnCancel.Enabled = $false
         $rbHigh.Enabled = $true
         $rbMedium.Enabled = $true
@@ -1037,6 +1130,7 @@ $script:DebugLogPath
         $btnScan.Enabled = $true
         $btnBrowse.Enabled = $true
         $btnDeleteBaks.Enabled = $true
+        $chkAdminMode.Enabled = $true
         $btnCancel.Enabled = $false
         $rbHigh.Enabled = $true
         $rbMedium.Enabled = $true
@@ -1044,9 +1138,6 @@ $script:DebugLogPath
         Read-QueueIntoUi}})
 $form.Add_Shown({Add-UILog 'GUI initialised successfully.'
     Add-UILog "PowerShell version: $($PSVersionTable.PSVersion)"
-    Add-UILog "Running as user: $env:USERNAME"
-    if ($script:IsAdmin) {Add-UILog 'ADMIN MODE: hello Rueben, Jason or Roy! welcome to admin mode.'
-    Add-UILog 'ADMIN MODE: this unlocks deleting .bak files and opening the temp folder to see unzipped PowerPoint files.'}
     Add-UILog "ImageMagick path: $ImageMagick"
     Add-UILog "ImageMagick exists: $(Test-Path -LiteralPath $ImageMagick -PathType Leaf)"
     Add-UILog 'Ready. Select a folder and click Scan for PPTX Files.'})
