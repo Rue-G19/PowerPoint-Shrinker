@@ -3,7 +3,7 @@ A PPTX/PPTM file size shrinker that works by extracting the file and running the
 
 ## **Installation and Setup**
 
-- Download the latest release.
+- Download the latest [release.](https://github.com/Rue-G19/PowerPoint-Shrinker/releases)
 - For the easiest setup, use the **Installer**.
 - Alternatively, use the **portable version**. On first launch, it will automatically extract all required files.
 
