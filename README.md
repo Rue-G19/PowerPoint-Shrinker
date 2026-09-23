@@ -4,7 +4,9 @@ A PPTX/PPTM file size shrinker that works by extracting the file and running the
 Installation and Setup:
 
 - Download the latest release
-Portable Binary (will unzip dependencies on launch) **OR** Use the simple installer
+Portable Binary (will unzip dependencies on launch)
+**OR**
+Use the simple installer
 
 How to use the tool:
 
@@ -12,3 +14,7 @@ How to use the tool:
 - Select what files you want to compress and the compression level
 - Click "Compress Checked" to start running the compression
 - Say "wow this is cool"
+
+Advanced (Admin) Options:
+
+Checking the Admin box will allow you to use some more advanced options such as opening the unzipped files whilst in progress, deleting all the backups, removing the Small_ prefix, CSV report files and other logs. Not recommended for standard users! 
