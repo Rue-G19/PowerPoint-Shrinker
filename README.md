@@ -11,11 +11,13 @@ Use the simple installer
 How to use the tool:
 
 - Click the "Browse" button to open a file picker, select the folder containing your PPT files (scanning is recursive)
-- Select what files you want to compress and the compression level
+- Select what files you want to compress and the compression level (High, Medium, Low)
 - Click "Compress Checked" to start running the compression
 - Say "wow this is cool"
 
 <img width="980" height="687" alt="image" src="https://github.com/user-attachments/assets/911de336-6104-400c-8959-fffe53bb4951" />
+
+
 
 Advanced (Admin) Options:
 
