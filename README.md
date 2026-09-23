@@ -15,7 +15,7 @@ How to use the tool:
 - Click "Compress Checked" to start running the compression
 - Say "wow this is cool"
 
-<img width="980" height="687" alt="image" src="https://github.com/user-attachments/assets/911de336-6104-400c-8959-fffe53bb4951" />
+<img width="980" height="687" alt="image" src="https://github.com/user-attachments/assets/8f0b8cb3-0d1c-45ba-b345-50cbc532d6b3" />
 
 
 
