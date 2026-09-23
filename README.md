@@ -3,10 +3,8 @@ A PPTX/PPTM file size shrinker that works by extracting the file and running the
 
 Installation and Setup:
 
-- Download and unzip
-- Run "RunShrinker-Public.bat"
-- The tool will open and point you to the ImageMagick website, download the CLI tool and copy the magick.exe file to the ImageMagick folder next to the script.
-- Restart the tool
+- Download the latest release
+Portable Binary (will unzip dependencies on launch) **OR** Use the simple installer
 
 How to use the tool:
 
