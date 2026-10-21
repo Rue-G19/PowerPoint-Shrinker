@@ -1,6 +1,8 @@
 # PowerPoint-Shrinker
 A PPTX/PPTM file size shrinker that works by extracting the file and running the image files through a compressor, all wrapped up in a pretty little UI. Created during my time at Nissan. Uses bundled ImageMagick for image compression.
 
+This won me the Nissan Way Award (21/10/2026) 🎉🎉
+
 ## **Installation and Setup**
 
 - Download the latest [release.](https://github.com/Rue-G19/PowerPoint-Shrinker/releases)
