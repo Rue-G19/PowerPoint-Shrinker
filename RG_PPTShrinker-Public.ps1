@@ -282,6 +282,35 @@ $lblCredit.Location = New-Object System.Drawing.Point(20, 640)
 $lblCredit.AutoSize = $true
 $lblCredit.Anchor = 'Bottom,Left'
 $form.Controls.Add($lblCredit)
+$lnkRepo = New-Object System.Windows.Forms.LinkLabel
+$lnkRepo.Text = 'GitHub repo: Rue-G19/PowerPoint-Shrinker'
+$lnkRepo.Location = New-Object System.Drawing.Point(20, 660)
+$lnkRepo.AutoSize = $true
+$lnkRepo.Anchor = 'Bottom,Left'
+$lnkRepo.LinkBehavior = [System.Windows.Forms.LinkBehavior]::AlwaysUnderline
+$lnkRepo.LinkColor = [System.Drawing.Color]::DodgerBlue
+$lnkRepo.VisitedLinkColor = [System.Drawing.Color]::Purple
+$lnkRepo.Links.Add(0, $lnkRepo.Text.Length, 'https://github.com/Rue-G19/PowerPoint-Shrinker')
+$lnkRepo.Add_LinkClicked({
+    param($sender, $eventArgs)
+    $url = [string]::Empty
+    if ($null -ne $eventArgs -and $null -ne $eventArgs.Link) {
+        $url = [string]$eventArgs.Link.LinkData
+    }
+    if (-not [string]::IsNullOrWhiteSpace($url)) {
+        try {
+            Start-Process $url | Out-Null
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Could not open the repository link:`r`n$url",
+                'PowerPoint Bulk Shrinker - GitHub Link',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        }
+    }
+})
+$form.Controls.Add($lnkRepo)
 $chkAdminMode = New-Object System.Windows.Forms.CheckBox
 $chkAdminMode.Text = 'Enable admin mode'
 $chkAdminMode.Location = New-Object System.Drawing.Point(820, 640)
@@ -302,13 +331,30 @@ $script:LogWriter = $null
 $script:StartTime = $null
 $script:TempDirectory = [IO.Path]::GetTempPath()
 $script:BackupRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PPTX shrinker backups'
+function Get-GeneratedPowerPointFiles {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootPath)
+    if (-not (Test-Path -LiteralPath $RootPath -PathType Container)) {
+        return @()
+    }
+    $patterns = @('Small_*.pptx', 'Small_*.pptm')
+    $files = @()
+    foreach ($pattern in $patterns) {
+        $files += @(Get-ChildItem -LiteralPath $RootPath -Filter $pattern -File -Recurse -ErrorAction SilentlyContinue)
+    }
+    return @($files | Sort-Object FullName -Unique)
+}
 function Add-UILog {
     param([string]$Message)
+    if ($null -eq $Message) {$Message = ''}
     $stamp = (Get-Date).ToString('HH:mm:ss.fff')
     $line = "[$stamp] $Message"
-    $txtLog.AppendText($line + [Environment]::NewLine)
-    $txtLog.SelectionStart = $txtLog.TextLength
-    $txtLog.ScrollToCaret()
+    if ($null -ne $txtLog) {
+        $txtLog.AppendText($line + [Environment]::NewLine)
+        $txtLog.SelectionStart = $txtLog.TextLength
+        $txtLog.ScrollToCaret()
+    }
     if ($script:LogWriter) {try {$script:LogWriter.WriteLine($line)
         $script:LogWriter.Flush()} catch {}}}
 function Read-QueueIntoUi {
@@ -346,6 +392,23 @@ function Get-CompressionSettings {
         Name = 'Medium'
         MaxWidth = 1600
         Quality = 75}}
+function Stop-WorkerPowerShell {
+    if (-not $script:WorkerPowerShell) {return}
+    try {
+        $script:CancelRequested = $true
+        $script:WorkerPowerShell.Stop()
+    }
+    catch {
+        Add-UILog ("WORKER STOP ERROR: " + $_.Exception.Message)
+    }
+}
+function Dispose-WorkerPowerShell {
+    if (-not $script:WorkerPowerShell) {return}
+    try {$script:WorkerPowerShell.Dispose()} catch {}
+    $script:WorkerPowerShell = $null
+    $script:WorkerAsync = $null
+    $script:WorkerControl = $null
+}
 $workerCode = {param(
         [string]$Folder,
         [string]$BackupRoot,
@@ -799,7 +862,7 @@ $btnCleanup.Add_Click({if (-not $script:IsAdmin -or $script:RunState -eq 'Runnin
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
         return}
-    try {$outputFiles = @(Get-ChildItem -LiteralPath $folder -Filter 'Small_*.pptx' -File -Recurse -ErrorAction Stop)
+    try {$outputFiles = @(Get-GeneratedPowerPointFiles -RootPath $folder)
         $reportPath = Join-Path $folder 'PPT_Shrinking_Report.csv'
         if ($outputFiles.Count -eq 0 -and -not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
             [System.Windows.Forms.MessageBox]::Show(
@@ -818,6 +881,14 @@ $btnCleanup.Add_Click({if (-not $script:IsAdmin -or $script:RunState -eq 'Runnin
         $renameFailures = @()
         foreach ($outputFile in $outputFiles) {
             $destinationName = $outputFile.Name.Substring(6)
+            $destinationPath = Join-Path $outputFile.DirectoryName $destinationName
+            if (Test-Path -LiteralPath $destinationPath -PathType Leaf) {
+                $baseName = [System.IO.Path]::GetFileNameWithoutExtension($destinationName)
+                $ext = [System.IO.Path]::GetExtension($destinationName)
+                $timestamp = [DateTime]::Now.ToString('yyyyMMddHHmmssfff')
+                $destinationName = '{0}_{1}{2}' -f $baseName, $timestamp, $ext
+                $destinationPath = Join-Path $outputFile.DirectoryName $destinationName
+            }
             try {Rename-Item -LiteralPath $outputFile.FullName -NewName $destinationName -ErrorAction Stop
                 $renamed++} catch {$renameFailures += "$($outputFile.FullName): $($_.Exception.Message)"}}
         $reportDeleted = $false
@@ -849,7 +920,9 @@ $btnCancel.Add_Click({
         $btnCancel.Enabled = $false
         $lblStatus.Text = 'Cancellation requested...'
         Add-UILog 'CANCEL: cancellation requested by user.'
-        if ($script:WorkerPowerShell) {try {} catch {}}}})
+        Stop-WorkerPowerShell
+    }
+})
 $btnScan.Add_Click({
     if ($script:RunState -eq 'Running') {return}
     $script:RequestedMode = 'Scan'
@@ -861,7 +934,7 @@ $btnStart.Add_Click({
     $folder = $txtFolder.Text.Trim()
     if ([string]::IsNullOrWhiteSpace($folder)) {
         [System.Windows.Forms.MessageBox]::Show(
-            'pick a folder pls',
+            'Please choose a folder containing the PowerPoint files to process.',
             'What folder?',
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null return}
@@ -938,7 +1011,7 @@ $btnStart.Add_Click({
     Add-UILog "Start time: $($script:StartTime.ToString('yyyy-MM-dd HH:mm:ss'))"
     Add-UILog "Compression profile: $($settings.Name)"
     Add-UILog "Maximum image width: $($settings.MaxWidth)"
-    Add-UILog "I refuse to take responsibility for any data loss. By continuing, you agree to this risk.`r`nBackups will be saved to: $backupRoot (please verify this folder exists and is writable)"
+    Add-UILog "This tool modifies source files and creates backups. Please verify the backup folder is writable before continuing.`r`nBackups will be saved to: $backupRoot"
     Add-UILog "PowerShell version: $($PSVersionTable.PSVersion)"
     Add-UILog "Script path: $script:ScriptPath"
     Add-UILog "Script directory: $ScriptDirectory"
@@ -1120,11 +1193,7 @@ $script:DebugLogPath
                     [System.Windows.Forms.MessageBoxButtons]::OK,
                     [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null}}
         # bin the pipeline and runspace, all done now
-        try {if ($script:WorkerPowerShell) {
-        $script:WorkerPowerShell.Dispose()}} catch {}
-        $script:WorkerPowerShell = $null
-        $script:WorkerAsync = $null
-        $script:WorkerControl = $null
+        Dispose-WorkerPowerShell
         $btnStart.Enabled = $true
         $btnScan.Enabled = $true
         $btnBrowse.Enabled = $true
@@ -1147,11 +1216,13 @@ $form.Add_FormClosing({
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Warning)
         if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
-        $_.Cancel = $true 
-        return }
+            $_.Cancel = $true
+            return
+        }
         if ($script:WorkerControl) {$script:WorkerControl.Cancelled = $true}
-        if ($script:WorkerPowerShell) {try { $script:WorkerPowerShell.Stop() } catch {}
-        try { $script:WorkerPowerShell.Dispose() } catch {}}}
+        Stop-WorkerPowerShell
+        Dispose-WorkerPowerShell
+    }
     try { $timer.Stop() } catch {}
     try { if ($script:LogWriter) { $script:LogWriter.Dispose() } } catch {}})
 [void]$form.ShowDialog()
