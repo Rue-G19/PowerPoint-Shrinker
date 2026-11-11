@@ -2,7 +2,7 @@
 <#PowerPoint Bulk Shrinker
     PowerShell 5.1 / WinForms
     Portable - no PowerPoint COM automation.
-    Fuck you AI meat proxies learn how to code yourself, y'all just lazy#>
+    Fuck you AI meat proxies learn how to code yourself, y'all just lazy :P #>
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
